@@ -1,30 +1,30 @@
-const express = require("express")
-const app = express()
-const http = require("http")
-const server = new http.Server(app)
-const io = require("socket.io")(server)
-const helmet = require("helmet")
-const cors = require("cors")
+const express = require('express')
+const app     = express()
+const http    = require('http')
+const server  = new http.Server(app)
+const io      = require('socket.io')(server)
+const helmet  = require('helmet')
+const cors    = require('cors')
 const {
-  rooms,
-  addSocketToRoom,
-  removeSocketFromRoom,
-  allSocketsForRoom,
-} = require("./rooms")
-const config = require("./config")
+        rooms,
+        addSocketToRoom,
+        removeSocketFromRoom,
+        allSocketsForRoom
+      }       = require('./rooms')
+const config  = require('./config')
 
 const CONFIG = {
-  title: config.title,
-  host: process.env.HOST || config.host || undefined,
-  port: process.env.PORT || config.port || 4444,
+  title:   config.title,
+  host:    process.env.HOST || config.host || undefined,
+  port:    process.env.PORT || config.port || 4444,
   timeout: config.timeout || 30000,
-  max: config.max || 50,
-  debug: config.debug || false,
+  max:     config.max || 50,
+  debug:   config.debug || false
 }
 
 process.title = CONFIG.title
 
-const log = require("debug")("signal:server")
+const log = require('debug')('signal:server')
 
 app.use(helmet())
 app.use(cors())
@@ -33,97 +33,99 @@ app.use(cors())
 
 let brokenSockets = {}
 
-function activeSockets(id = null) {
+function activeSockets ( id = null ) {
   return Object.keys(io.sockets.connected).filter(
-    (sid) => sid !== id && !brokenSockets[sid]
+    ( sid ) => sid !== id && !brokenSockets[ sid ]
   )
 }
 
-function brokenSocket(socket) {
-  brokenSockets[socket.id] = true
+function brokenSocket ( socket ) {
+  brokenSockets[ socket.id ] = true
   // log('--- broken sockets', Object.keys(brokenSockets).length, 'connected', activeSockets().length)
-  io.emit("remove", { id: socket.id })
+  io.emit('remove', { id: socket.id })
 }
 
-function socketByID(id) {
-  return io.sockets.connected[id]
+function socketByID ( id ) {
+  return io.sockets.connected[ id ]
 }
 
-function emitByID(id, name, msg) {
+function emitByID ( id, name, msg ) {
   let socket = socketByID(id)
   if (socket) {
-    log("emit", id, name, msg)
+    log('emit', id, name, msg)
     socket.emit(name, msg)
   }
 }
 
-function broadcastByID(ids, name, msg) {
+function broadcastByID ( ids, name, msg ) {
   for (let id of ids) {
     emitByID(id, name, msg)
   }
 }
 
-io.on("connection", function (socket) {
+io.on('connection', function ( socket ) {
   const sid = socket.id
   let currentRoom
 
   // let peers = activeSockets(sid)
-  log("connection socket id:", sid)
+  log('connection socket id:', sid)
 
-  for (const msg of ["disconnect", "disconnecting", "error"]) {
-    socket.on(msg, (data) => {
-      log(`* ${msg}:`, data)
+  for (const msg of [ 'disconnect', 'disconnecting', 'error' ]) {
+    socket.on(msg, ( data ) => {
+      log(`* ${ msg }:`, data)
       brokenSocket(socket)
       removeSocketFromRoom(sid, currentRoom)
     })
   }
 
-  socket.on("status", (info, cb) => {
-    log("status", info, cb)
+  socket.on('status', ( info, cb ) => {
+    log('status', info, cb)
     if (cb)
       cb({
-        api: 1,
-        pong: info?.ping || "pong",
-        config: CONFIG,
+        api:    1,
+        pong:   info?.ping || 'pong',
+        config: CONFIG
       })
   })
 
   // The peer that joined is responsible for initiating WebRTC connections
-  socket.on("join", ({ room }) => {
-    let peers = allSocketsForRoom(room)
+  socket.on('join', ( { room } ) => {
+    let peers  = allSocketsForRoom(room)
     const full = peers.length >= config.max
     if (full) {
-      socket.emit("error", {
-        error: `Room ${room} is full`,
-        code: 1,
-        full,
+      socket.emit('error', {
+        error: `Room ${ room } is full`,
+        code:  1,
+        full
       })
-    } else {
+    }
+    else {
       removeSocketFromRoom(sid, currentRoom)
       addSocketToRoom(sid, room)
       currentRoom = room
-      socket.emit("joined", {
+      socket.emit('joined', {
         room,
-        peers,
+        peers
       })
     }
   })
 
   // Ask for a connection to another socket via ID
-  socket.on("signal", (data) => {
-    log("signal", data.from, data.to)
+  socket.on('signal', ( data ) => {
+    log('signal', data.from, data.to)
     if (data.from !== sid) {
-      log("*** error, wrong from", data.from)
+      log('*** error, wrong from', data.from)
     }
     if (data.to) {
       const toSocket = socketByID(data.to)
       if (toSocket) {
-        toSocket.emit("signal", {
-          ...data,
+        toSocket.emit('signal', {
+          ...data
           // from: socket.id,
         })
-      } else {
-        log("Cannot find socket for %s", data.to)
+      }
+      else {
+        log('Cannot find socket for %s', data.to)
       }
     }
   })
@@ -134,21 +136,21 @@ io.on("connection", function (socket) {
 const startDate = new Date()
 
 if (CONFIG.debug) {
-  app.use("/status", (req, res) => {
+  app.use('/status', ( req, res ) => {
     let status = {
-      api: 1,
+      api:     1,
       success: true,
-      info: {
-        timeStarted: Math.round(startDate.getTime()),
+      info:    {
+        timeStarted:       Math.round(startDate.getTime()),
         activeConnections: activeSockets().length,
-        rooms,
-      },
+        rooms
+      }
     }
     res.json(status)
   })
 }
 
-app.use("/", (req, res) => {
+app.use('/', ( req, res ) => {
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -163,7 +165,7 @@ app.use("/", (req, res) => {
 </head>
 <body>
   <p><b><a href="https://brie.fi/ng">Briefing</a> Signal Server</b></p>
-  <p>Running since ${startDate.toISOString()}</p>  
+  <p>Running since ${ startDate.toISOString() }</p>  
 </body>
 </html>`)
 })
@@ -175,9 +177,9 @@ app.use("/", (req, res) => {
 server.listen(
   {
     host: CONFIG.host,
-    port: CONFIG.port,
+    port: CONFIG.port
   },
-  (info) => {
+  ( info ) => {
     console.info(`Running on`, server.address())
   }
 )
