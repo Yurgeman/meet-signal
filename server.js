@@ -164,7 +164,7 @@ app.use('/', ( req, res ) => {
   <title>Briefing Signal Server</title>
 </head>
 <body>
-  <p><b><a href="https://brie.fi/ng">Briefing</a> Signal Server</b></p>
+  <p><b><a href="https://conf.docsme.ru/">Briefing</a> Signal Server</b></p>
   <p>Running since ${ startDate.toISOString() }</p>  
 </body>
 </html>`)
